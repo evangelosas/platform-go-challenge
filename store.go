@@ -7,9 +7,7 @@ import (
 	"time"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
+var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type Store interface {
 	List(userID string) []Asset
@@ -56,6 +54,8 @@ func (s *InMemoryStore) Add(userID string, a Asset) (Asset, error) {
 	if a.GetID() == "" {
 		setID(a, newID())
 	}
+	// set CreatedAt if zero
+	setCreatedAtIfZero(a, time.Now())
 	umap := s.ensureUser(userID)
 	if _, exists := umap[a.GetID()]; exists {
 		return nil, errors.New("asset with same id already exists for user")
@@ -98,7 +98,7 @@ func (s *InMemoryStore) UpdateDescription(userID, assetID, description string) (
 
 func newID() string {
 	now := time.Now().UnixNano()
-	return fmtID(now, rand.Int63())
+	return fmtID(now, rng.Int63())
 }
 
 func fmtID(x, y int64) string {
@@ -128,5 +128,22 @@ func setID(a Asset, id string) {
 		v.ID = id
 	case *AudienceAsset:
 		v.ID = id
+	}
+}
+
+func setCreatedAtIfZero(a Asset, t time.Time) {
+	switch v := a.(type) {
+	case *ChartAsset:
+		if v.CreatedAt.IsZero() {
+			v.CreatedAt = t
+		}
+	case *InsightAsset:
+		if v.CreatedAt.IsZero() {
+			v.CreatedAt = t
+		}
+	case *AudienceAsset:
+		if v.CreatedAt.IsZero() {
+			v.CreatedAt = t
+		}
 	}
 }

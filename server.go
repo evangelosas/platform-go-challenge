@@ -5,7 +5,10 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -32,6 +35,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(segs) == 4 {
+		if segs[3] == "bulk" {
+			s.handleUserFavouritesBulk(w, r, userID)
+			return
+		}
 		assetID := segs[3]
 		s.handleUserFavouriteByID(w, r, userID, assetID)
 		return
@@ -43,6 +50,53 @@ func (s *Server) handleUserFavourites(w http.ResponseWriter, r *http.Request, us
 	switch r.Method {
 	case http.MethodGet:
 		assets := s.store.List(userID)
+		// sorting
+		q := r.URL.Query()
+		sortField := q.Get("sort")
+		if sortField == "" {
+			sortField = "created_at"
+		}
+		order := strings.ToLower(q.Get("order"))
+		desc := order == "desc"
+		sort.Slice(assets, func(i, j int) bool {
+			a, b := assets[i], assets[j]
+			switch sortField {
+			case "type":
+				if desc {
+					return string(a.GetType()) > string(b.GetType())
+				}
+				return string(a.GetType()) < string(b.GetType())
+			case "created_at":
+				ai, aj := createdAtOf(a), createdAtOf(b)
+				if desc {
+					return ai.After(aj)
+				}
+				return ai.Before(aj)
+			default:
+				ai, aj := createdAtOf(a), createdAtOf(b)
+				if desc {
+					return ai.After(aj)
+				}
+				return ai.Before(aj)
+			}
+		})
+		// pagination
+		limit := parseIntDefault(q.Get("limit"), 100)
+		if limit <= 0 || limit > 1000 {
+			limit = 100
+		}
+		offset := parseIntDefault(q.Get("offset"), 0)
+		if offset < 0 {
+			offset = 0
+		}
+		end := offset + limit
+		if offset > len(assets) {
+			assets = []Asset{}
+		} else if end < len(assets) {
+			assets = assets[offset:end]
+		} else if offset < len(assets) {
+			assets = assets[offset:]
+		}
 		writeJSON(w, http.StatusOK, assets)
 	case http.MethodPost:
 		body, err := io.ReadAll(r.Body)
@@ -73,6 +127,71 @@ func (s *Server) handleUserFavourites(w http.ResponseWriter, r *http.Request, us
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+func (s *Server) handleUserFavouritesBulk(w http.ResponseWriter, r *http.Request, userID string) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", "POST")
+		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	var reqs []AddAssetRequest
+	if err := json.Unmarshal(body, &reqs); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json array: "+err.Error())
+		return
+	}
+	assets := make([]Asset, 0, len(reqs))
+	for i, r := range reqs {
+		if err := r.ValidateBasic(); err != nil {
+			writeError(w, http.StatusBadRequest, "item "+strconv.Itoa(i)+": "+err.Error())
+			return
+		}
+		a, err := DecodeAssetFromAddRequest(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "item "+strconv.Itoa(i)+": "+err.Error())
+			return
+		}
+		assets = append(assets, a)
+	}
+	created := make([]Asset, 0, len(assets))
+	for i, a := range assets {
+		c, err := s.store.Add(userID, a)
+		if err != nil {
+			writeError(w, http.StatusConflict, "item "+strconv.Itoa(i)+": "+err.Error())
+			return
+		}
+		created = append(created, c)
+	}
+	writeJSON(w, http.StatusCreated, created)
+}
+
+func parseIntDefault(s string, def int) int {
+	if s == "" {
+		return def
+	}
+	v, err := strconv.Atoi(s)
+	if err != nil {
+		return def
+	}
+	return v
+}
+
+func createdAtOf(a Asset) time.Time {
+	switch v := a.(type) {
+	case *ChartAsset:
+		return v.CreatedAt
+	case *InsightAsset:
+		return v.CreatedAt
+	case *AudienceAsset:
+		return v.CreatedAt
+	default:
+		return time.Time{}
 	}
 }
 

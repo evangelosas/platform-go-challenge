@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 )
 
 type AssetType string
@@ -26,6 +27,7 @@ type BaseAsset struct {
 	ID          string    `json:"id"`
 	Type        AssetType `json:"type"`
 	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 func (b *BaseAsset) GetID() string           { return b.ID }
@@ -135,5 +137,37 @@ func DecodeAssetFromAddRequest(req AddAssetRequest) (Asset, error) {
 		return asset, nil
 	default:
 		return nil, fmt.Errorf("unsupported asset type: %s", req.Type)
+	}
+}
+
+// DecodeAssetFromJSON decodes a stored flat JSON object into a concrete Asset by inspecting its type field.
+func DecodeAssetFromJSON(data []byte) (Asset, error) {
+	var probe struct {
+		Type AssetType `json:"type"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil {
+		return nil, fmt.Errorf("invalid asset json: %w", err)
+	}
+	switch probe.Type {
+	case AssetChart:
+		var a ChartAsset
+		if err := json.Unmarshal(data, &a); err != nil {
+			return nil, err
+		}
+		return &a, nil
+	case AssetInsight:
+		var a InsightAsset
+		if err := json.Unmarshal(data, &a); err != nil {
+			return nil, err
+		}
+		return &a, nil
+	case AssetAudience:
+		var a AudienceAsset
+		if err := json.Unmarshal(data, &a); err != nil {
+			return nil, err
+		}
+		return &a, nil
+	default:
+		return nil, fmt.Errorf("unsupported asset type: %s", probe.Type)
 	}
 }
