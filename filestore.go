@@ -133,7 +133,7 @@ func (s *FileStore) load() error {
 	return nil
 }
 
-func (s *FileStore) saveLocked() error {
+func (s *FileStore) saveLocked() (err error) {
 	d := onDisk{Users: make(map[string]map[string]json.RawMessage, len(s.users))}
 	for uid, m := range s.users {
 		mm := make(map[string]json.RawMessage, len(m))
@@ -153,11 +153,18 @@ func (s *FileStore) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(true)
 	enc.SetIndent("", "  ")
-	return enc.Encode(&d)
+	if e := enc.Encode(&d); e != nil {
+		return e
+	}
+	return nil
 }
 
 // now is overridden in tests to make times deterministic.
