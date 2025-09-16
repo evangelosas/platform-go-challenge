@@ -1,17 +1,19 @@
-package gwiTest
+package gwiExercise_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	gwiExercise "platform-go-challenge/gwiExercise"
 )
 
 func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {
-	s := NewInMemoryStore()
+	s := gwiExercise.NewInMemoryStore()
 	user := "u1"
 
 	// add with empty ID assigns one
-	chart := &ChartAsset{BaseAsset: BaseAsset{Type: AssetChart, Description: "d1"}, Title: "t"}
+	chart := &gwiExercise.ChartAsset{BaseAsset: gwiExercise.BaseAsset{Type: gwiExercise.AssetChart, Description: "d1"}, Title: "t"}
 	a, err := s.Add(user, chart)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -21,7 +23,7 @@ func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {
 	}
 
 	// duplicate id for same user
-	dup := &ChartAsset{BaseAsset: BaseAsset{ID: a.GetID(), Type: AssetChart, Description: "d1"}, Title: "t"}
+	dup := &gwiExercise.ChartAsset{BaseAsset: gwiExercise.BaseAsset{ID: a.GetID(), Type: gwiExercise.AssetChart, Description: "d1"}, Title: "t"}
 	if _, err := s.Add(user, dup); err == nil {
 		t.Fatalf("expected duplicate error")
 	}
@@ -47,19 +49,19 @@ func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {
 func TestFileStore_PersistReload(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "fav.json")
-	fs, err := NewFileStore(file)
+	fs, err := gwiExercise.NewFileStore(file)
 	if err != nil {
 		t.Fatalf("init filestore: %v", err)
 	}
 
 	user := "u2"
-	_, err = fs.Add(user, &InsightAsset{BaseAsset: BaseAsset{Type: AssetInsight, Description: "ins"}, Text: "hello"})
+	_, err = fs.Add(user, &gwiExercise.InsightAsset{BaseAsset: gwiExercise.BaseAsset{Type: gwiExercise.AssetInsight, Description: "ins"}, Text: "hello"})
 	if err != nil {
 		t.Fatalf("add: %v", err)
 	}
 
 	// reload new instance
-	fs2, err := NewFileStore(file)
+	fs2, err := gwiExercise.NewFileStore(file)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}

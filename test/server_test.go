@@ -1,4 +1,4 @@
-package gwiTest
+package gwiExercise_test
 
 import (
 	"bytes"
@@ -7,9 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	gwiExercise "platform-go-challenge/gwiExercise"
 )
 
-func doReq(s *Server, method, path string, body any) *httptest.ResponseRecorder {
+func doReq(s *gwiExercise.Server, method, path string, body any) *httptest.ResponseRecorder {
 	var reader io.Reader
 	if body != nil {
 		b, _ := json.Marshal(body)
@@ -22,8 +24,8 @@ func doReq(s *Server, method, path string, body any) *httptest.ResponseRecorder 
 }
 
 func TestAddListUpdateDeleteFlow(t *testing.T) {
-	store := NewInMemoryStore()
-	s := NewServer(store)
+	store := gwiExercise.NewInMemoryStore()
+	s := gwiExercise.NewServer(store)
 	user := "u123"
 
 	// Initially empty list
@@ -92,8 +94,8 @@ func TestAddListUpdateDeleteFlow(t *testing.T) {
 }
 
 func TestValidationErrors(t *testing.T) {
-	store := NewInMemoryStore()
-	s := NewServer(store)
+	store := gwiExercise.NewInMemoryStore()
+	s := gwiExercise.NewServer(store)
 	user := "u1"
 
 	// Missing fields

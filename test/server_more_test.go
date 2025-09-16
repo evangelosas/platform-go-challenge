@@ -1,14 +1,16 @@
-package gwiTest
+package gwiExercise_test
 
 import (
 	"encoding/json"
 	"net/http"
 	"testing"
+
+	gwiExercise "platform-go-challenge/gwiExercise"
 )
 
 func TestPaginationAndBulk(t *testing.T) {
-	store := NewInMemoryStore()
-	s := NewServer(store)
+	store := gwiExercise.NewInMemoryStore()
+	s := gwiExercise.NewServer(store)
 	user := "u3"
 
 	// bulk add two assets
@@ -47,8 +49,8 @@ func TestPaginationAndBulk(t *testing.T) {
 }
 
 func TestPatchValidationAndDeleteNotFound(t *testing.T) {
-	store := NewInMemoryStore()
-	s := NewServer(store)
+	store := gwiExercise.NewInMemoryStore()
+	s := gwiExercise.NewServer(store)
 	user := "u4"
 
 	// patch with empty description

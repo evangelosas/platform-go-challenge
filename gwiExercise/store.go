@@ -1,4 +1,4 @@
-package gwiTest
+package gwiExercise
 
 import (
 	"errors"
