@@ -35,7 +35,6 @@ func (b *BaseAsset) GetType() AssetType      { return b.Type }
 func (b *BaseAsset) GetDescription() string  { return b.Description }
 func (b *BaseAsset) SetDescription(d string) { b.Description = d }
 
-// ChartAsset represents a chart with basic metadata and numeric data points.
 type ChartAsset struct {
 	BaseAsset
 	Title      string    `json:"title"`
@@ -49,7 +48,6 @@ func (c *ChartAsset) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*alias)(c))
 }
 
-// InsightAsset represents a short insight text.
 type InsightAsset struct {
 	BaseAsset
 	Text string `json:"text"`
@@ -60,7 +58,6 @@ func (i *InsightAsset) MarshalJSON() ([]byte, error) {
 	return json.Marshal((*alias)(i))
 }
 
-// AudienceAsset represents a simple audience definition for the exercise.
 type AudienceAsset struct {
 	BaseAsset
 	Gender             string `json:"gender"`
@@ -100,51 +97,63 @@ func (r AddAssetRequest) ValidateBasic() error {
 func DecodeAssetFromAddRequest(req AddAssetRequest) (Asset, error) {
 	switch req.Type {
 	case AssetChart:
-		var body struct {
-			Title      string    `json:"title"`
-			XAxisTitle string    `json:"xAxisTitle"`
-			YAxisTitle string    `json:"yAxisTitle"`
-			Data       []float64 `json:"data"`
-		}
-		if err := json.Unmarshal(req.Payload, &body); err != nil {
-			return nil, fmt.Errorf("invalid chart payload: %w", err)
-		}
-		// basic validation for required fields
-		if body.Title == "" {
-			return nil, fmt.Errorf("invalid chart payload: missing title")
-		}
-		asset := &ChartAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetChart, Description: req.Description},
-			Title: body.Title, XAxisTitle: body.XAxisTitle, YAxisTitle: body.YAxisTitle, Data: body.Data}
-		return asset, nil
+		return ExtractChart(req)
 	case AssetInsight:
-		var body struct {
-			Text string `json:"text"`
-		}
-		if err := json.Unmarshal(req.Payload, &body); err != nil {
-			return nil, fmt.Errorf("invalid insight payload: %w", err)
-		}
-		if body.Text == "" {
-			return nil, fmt.Errorf("invalid insight payload: missing text")
-		}
-		asset := &InsightAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetInsight, Description: req.Description}, Text: body.Text}
-		return asset, nil
+		return ExtractInsight(req)
 	case AssetAudience:
-		var body struct {
-			Gender             string `json:"gender"`
-			BirthCountry       string `json:"birthCountry"`
-			AgeGroup           string `json:"ageGroup"`
-			SocialHoursPerDay  string `json:"socialHoursPerDay"`
-			PurchasesLastMonth int    `json:"purchasesLastMonth"`
-		}
-		if err := json.Unmarshal(req.Payload, &body); err != nil {
-			return nil, fmt.Errorf("invalid audience payload: %w", err)
-		}
-		asset := &AudienceAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetAudience, Description: req.Description},
-			Gender: body.Gender, BirthCountry: body.BirthCountry, AgeGroup: body.AgeGroup, SocialHoursPerDay: body.SocialHoursPerDay, PurchasesLastMonth: body.PurchasesLastMonth}
-		return asset, nil
+		return ExtractAudience(req)
 	default:
 		return nil, fmt.Errorf("unsupported asset type: %s", req.Type)
 	}
+}
+
+func ExtractAudience(req AddAssetRequest) (Asset, error) {
+	var body struct {
+		Gender             string `json:"gender"`
+		BirthCountry       string `json:"birthCountry"`
+		AgeGroup           string `json:"ageGroup"`
+		SocialHoursPerDay  string `json:"socialHoursPerDay"`
+		PurchasesLastMonth int    `json:"purchasesLastMonth"`
+	}
+	if err := json.Unmarshal(req.Payload, &body); err != nil {
+		return nil, fmt.Errorf("invalid audience payload: %w", err)
+	}
+	asset := &AudienceAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetAudience, Description: req.Description},
+		Gender: body.Gender, BirthCountry: body.BirthCountry, AgeGroup: body.AgeGroup, SocialHoursPerDay: body.SocialHoursPerDay, PurchasesLastMonth: body.PurchasesLastMonth}
+	return asset, nil
+}
+
+func ExtractInsight(req AddAssetRequest) (Asset, error) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(req.Payload, &body); err != nil {
+		return nil, fmt.Errorf("invalid insight payload: %w", err)
+	}
+	if body.Text == "" {
+		return nil, fmt.Errorf("invalid insight payload: missing text")
+	}
+	asset := &InsightAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetInsight, Description: req.Description}, Text: body.Text}
+	return asset, nil
+}
+
+func ExtractChart(req AddAssetRequest) (Asset, error) {
+	var body struct {
+		Title      string    `json:"title"`
+		XAxisTitle string    `json:"xAxisTitle"`
+		YAxisTitle string    `json:"yAxisTitle"`
+		Data       []float64 `json:"data"`
+	}
+	if err := json.Unmarshal(req.Payload, &body); err != nil {
+		return nil, fmt.Errorf("invalid chart payload: %w", err)
+	}
+	// basic validation for required fields
+	if body.Title == "" {
+		return nil, fmt.Errorf("invalid chart payload: missing title")
+	}
+	asset := &ChartAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetChart, Description: req.Description},
+		Title: body.Title, XAxisTitle: body.XAxisTitle, YAxisTitle: body.YAxisTitle, Data: body.Data}
+	return asset, nil
 }
 
 // DecodeAssetFromJSON decodes a stored flat JSON object into a concrete Asset by inspecting its type field.

@@ -11,7 +11,6 @@ import (
 
 // FileStore persists favourites to a single JSON file on disk.
 // The file format is: { "users": { "<userID>": {"<assetID>": <asset-json>, ...}, ... } }
-// This is a simple format adequate for the exercise.
 type FileStore struct {
 	mu    sync.RWMutex
 	path  string
@@ -100,15 +99,12 @@ func (s *FileStore) UpdateDescription(userID, assetID, description string) (Asse
 	return a, nil
 }
 
-// Persistence
-
 type onDisk struct {
 	Users map[string]map[string]json.RawMessage `json:"users"`
 }
 
 func (s *FileStore) load() error {
-	// missing file is ok
-	b, err := os.ReadFile(s.path)
+	contents, err := os.ReadFile(s.path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -116,12 +112,12 @@ func (s *FileStore) load() error {
 		return err
 	}
 	var disk onDisk
-	if err := json.Unmarshal(b, &disk); err != nil {
+	if err := json.Unmarshal(contents, &disk); err != nil {
 		return err
 	}
-	for uid, m := range disk.Users {
-		umap := make(map[string]Asset, len(m))
-		for aid, raw := range m {
+	for uid, message := range disk.Users {
+		umap := make(map[string]Asset, len(message))
+		for aid, raw := range message {
 			a, err := DecodeAssetFromJSON(raw)
 			if err != nil {
 				return err
