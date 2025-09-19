@@ -1,11 +1,11 @@
-package gwiExercise_test
+package gwiexercise_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	gwiExercise "platform-go-challenge/gwiExercise"
+	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
 func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {

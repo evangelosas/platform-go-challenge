@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	gwi "platform-go-challenge/gwiExercise"
+	gwi "platform-go-challenge/gwiexercise"
 )
 
 func main() {

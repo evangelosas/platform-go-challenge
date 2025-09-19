@@ -1,11 +1,11 @@
-package gwiExercise_test
+package gwiexercise_test
 
 import (
 	"encoding/json"
 	"net/http"
 	"testing"
 
-	gwiExercise "platform-go-challenge/gwiExercise"
+	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
 func TestPaginationAndBulk(t *testing.T) {

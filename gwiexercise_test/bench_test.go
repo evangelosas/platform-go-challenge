@@ -1,10 +1,10 @@
-package gwiExercise_test
+package gwiexercise_test
 
 import (
 	"net/http"
 	"testing"
 
-	gwiExercise "platform-go-challenge/gwiExercise"
+	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
 func BenchmarkInMemoryAddList(b *testing.B) {

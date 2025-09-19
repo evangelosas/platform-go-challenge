@@ -1,4 +1,4 @@
-package gwiExercise_test
+package gwiexercise_test
 
 import (
 	"bytes"
@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	gwiExercise "platform-go-challenge/gwiExercise"
+	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
 func doReq(s *gwiExercise.Server, method, path string, body any) *httptest.ResponseRecorder {

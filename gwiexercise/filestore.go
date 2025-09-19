@@ -1,4 +1,4 @@
-package gwiExercise
+package gwiexercise
 
 import (
 	"encoding/json"

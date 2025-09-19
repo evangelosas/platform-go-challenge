@@ -1,4 +1,4 @@
-package gwiExercise
+package gwiexercise
 
 import (
 	"encoding/json"
@@ -109,6 +109,10 @@ func DecodeAssetFromAddRequest(req AddAssetRequest) (Asset, error) {
 		if err := json.Unmarshal(req.Payload, &body); err != nil {
 			return nil, fmt.Errorf("invalid chart payload: %w", err)
 		}
+		// basic validation for required fields
+		if body.Title == "" {
+			return nil, fmt.Errorf("invalid chart payload: missing title")
+		}
 		asset := &ChartAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetChart, Description: req.Description},
 			Title: body.Title, XAxisTitle: body.XAxisTitle, YAxisTitle: body.YAxisTitle, Data: body.Data}
 		return asset, nil
@@ -118,6 +122,9 @@ func DecodeAssetFromAddRequest(req AddAssetRequest) (Asset, error) {
 		}
 		if err := json.Unmarshal(req.Payload, &body); err != nil {
 			return nil, fmt.Errorf("invalid insight payload: %w", err)
+		}
+		if body.Text == "" {
+			return nil, fmt.Errorf("invalid insight payload: missing text")
 		}
 		asset := &InsightAsset{BaseAsset: BaseAsset{ID: req.ID, Type: AssetInsight, Description: req.Description}, Text: body.Text}
 		return asset, nil
