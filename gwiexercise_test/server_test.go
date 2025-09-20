@@ -41,7 +41,6 @@ func TestAddListUpdateDeleteFlow(t *testing.T) {
 		t.Fatalf("expected empty list, got %d", len(list))
 	}
 
-	// Add a chart asset
 	addReq := map[string]any{
 		"type":        "chart",
 		"description": "My chart",

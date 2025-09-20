@@ -13,7 +13,6 @@ func TestPaginationAndBulk(t *testing.T) {
 	s := gwiExercise.NewServer(store)
 	user := "u3"
 
-	// bulk add two assets
 	payload := []map[string]any{
 		{
 			"type":        "insight",
