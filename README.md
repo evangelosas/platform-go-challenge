@@ -44,6 +44,12 @@ Two store implementations:
 - Run tests: `go test ./...`
 - Run benchmarks: `go test -bench=. -benchmem`
 
+## API Docs (OpenAPI)
+
+- OpenAPI (YAML): `docs/openapi.yaml`
+- OpenAPI (JSON): `docs/openapi.json`
+- You can view them with Swagger UI by pointing it to the JSON URL/file. For local dev, run the server and open Swagger UI with the file:// path or host the JSON via any static file server.
+
 ## Submission
 
 Just create a fork from the current repo and send it to us!
