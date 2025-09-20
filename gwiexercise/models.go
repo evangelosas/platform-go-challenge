@@ -156,7 +156,6 @@ func ExtractChart(req AddAssetRequest) (Asset, error) {
 	return asset, nil
 }
 
-// DecodeAssetFromJSON decodes a stored flat JSON object into a concrete Asset by inspecting its type field.
 func DecodeAssetFromJSON(data []byte) (Asset, error) {
 	var probe struct {
 		Type AssetType `json:"type"`
@@ -164,26 +163,19 @@ func DecodeAssetFromJSON(data []byte) (Asset, error) {
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return nil, fmt.Errorf("invalid asset json: %w", err)
 	}
+	var asset Asset
 	switch probe.Type {
 	case AssetChart:
-		var a ChartAsset
-		if err := json.Unmarshal(data, &a); err != nil {
-			return nil, err
-		}
-		return &a, nil
+		asset = &ChartAsset{}
 	case AssetInsight:
-		var a InsightAsset
-		if err := json.Unmarshal(data, &a); err != nil {
-			return nil, err
-		}
-		return &a, nil
+		asset = &InsightAsset{}
 	case AssetAudience:
-		var a AudienceAsset
-		if err := json.Unmarshal(data, &a); err != nil {
-			return nil, err
-		}
-		return &a, nil
+		asset = &AudienceAsset{}
 	default:
 		return nil, fmt.Errorf("unsupported asset type: %s", probe.Type)
 	}
+	if err := json.Unmarshal(data, asset); err != nil {
+		return nil, err
+	}
+	return asset, nil
 }
