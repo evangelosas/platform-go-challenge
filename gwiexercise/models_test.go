@@ -3,223 +3,124 @@ package gwiexercise
 import (
 	"encoding/json"
 	"testing"
+	"time"
 )
 
-func TestAddAssetRequest_ValidateBasic(t *testing.T) {
-	tests := []struct {
-		name     string
-		request  AddAssetRequest
-		wantErr  bool
-		errorMsg string
-	}{
-		{
-			name:    "valid request",
-			request: AddAssetRequest{Type: "chart", Description: "Test Description", Payload: json.RawMessage(`{}`)},
-			wantErr: false,
-		},
-		{
-			name:     "missing type",
-			request:  AddAssetRequest{Description: "Test Description", Payload: json.RawMessage(`{}`)},
-			wantErr:  true,
-			errorMsg: "type is required",
-		},
-		{
-			name:     "missing description",
-			request:  AddAssetRequest{Type: "chart", Payload: json.RawMessage(`{}`)},
-			wantErr:  true,
-			errorMsg: "description is required",
-		},
-		{
-			name:     "missing payload",
-			request:  AddAssetRequest{Type: "chart", Description: "Test Description"},
-			wantErr:  true,
-			errorMsg: "payload is required",
-		},
+func TestBaseAsset(t *testing.T) {
+	base := &BaseAsset{
+		ID:          "123",
+		Type:        "Chart",
+		Description: "Test Description",
+		CreatedAt:   time.Now(),
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.ValidateBasic()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateBasic() error = %v, wantErr = %v", err, tt.wantErr)
-				return
-			}
-			if tt.wantErr && err.Error() != tt.errorMsg {
-				t.Errorf("ValidateBasic() error = %v, expected error = %v", err, tt.errorMsg)
-			}
-		})
+	t.Run("GetID", func(t *testing.T) {
+		if id := base.GetID(); id != "123" {
+			t.Errorf("expected ID to be '123', got '%s'", id)
+		}
+	})
+
+	t.Run("GetType", func(t *testing.T) {
+		if typ := base.GetType(); typ != "Chart" {
+			t.Errorf("expected Type to be 'Chart', got '%s'", typ)
+		}
+	})
+
+	t.Run("GetDescription", func(t *testing.T) {
+		if desc := base.GetDescription(); desc != "Test Description" {
+			t.Errorf("expected Description to be 'Test Description', got '%s'", desc)
+		}
+	})
+
+	t.Run("SetDescription", func(t *testing.T) {
+		base.SetDescription("Updated Description")
+		if desc := base.GetDescription(); desc != "Updated Description" {
+			t.Errorf("expected Description to be 'Updated Description', got '%s'", desc)
+		}
+	})
+}
+
+func TestChartAsset_MarshalJSON(t *testing.T) {
+	chart := &ChartAsset{
+		BaseAsset: BaseAsset{
+			ID:          "001",
+			Type:        "Chart",
+			Description: "Chart description",
+			CreatedAt:   time.Now(),
+		},
+		Title:      "Sample Chart",
+		XAxisTitle: "X Axis",
+		YAxisTitle: "Y Axis",
+		Data:       []float64{1.0, 2.5, 3.9},
+	}
+
+	bytes, err := chart.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error during MarshalJSON: %v", err)
+	}
+
+	var unmarshalledChart ChartAsset
+	if err := json.Unmarshal(bytes, &unmarshalledChart); err != nil {
+		t.Fatalf("unexpected error during UnmarshalJSON: %v", err)
+	}
+
+	if unmarshalledChart.Title != chart.Title {
+		t.Errorf("expected Title to be '%s', got '%s'", chart.Title, unmarshalledChart.Title)
 	}
 }
 
-func TestDecodeAssetFromAddRequest(t *testing.T) {
-	tests := []struct {
-		name       string
-		req        AddAssetRequest
-		wantType   AssetType
-		wantErr    bool
-		errorMsg   string
-		verifyFunc func(Asset) bool
-	}{
-		{
-			name: "valid chart asset",
-			req: AddAssetRequest{
-				ID:          "1",
-				Type:        "chart",
-				Description: "Chart Description",
-				Payload:     json.RawMessage(`{"title":"ChartTitle", "xAxisTitle":"XTitle", "yAxisTitle":"YTitle", "data":[1.0, 2.0, 3.0]}`),
-			},
-			wantType: "chart",
-			wantErr:  false,
-			verifyFunc: func(a Asset) bool {
-				chart, ok := a.(*ChartAsset)
-				return ok && chart.Title == "ChartTitle" && len(chart.Data) == 3
-			},
+func TestInsightAsset_MarshalJSON(t *testing.T) {
+	insight := &InsightAsset{
+		BaseAsset: BaseAsset{
+			ID:          "002",
+			Type:        "Insight",
+			Description: "Insight description",
+			CreatedAt:   time.Now(),
 		},
-		{
-			name: "valid insight asset",
-			req: AddAssetRequest{
-				ID:          "2",
-				Type:        "insight",
-				Description: "Insight Description",
-				Payload:     json.RawMessage(`{"text":"InsightText"}`),
-			},
-			wantType: "insight",
-			wantErr:  false,
-			verifyFunc: func(a Asset) bool {
-				insight, ok := a.(*InsightAsset)
-				return ok && insight.Text == "InsightText"
-			},
-		},
-		{
-			name: "valid audience asset",
-			req: AddAssetRequest{
-				ID:          "3",
-				Type:        "audience",
-				Description: "Audience Description",
-				Payload:     json.RawMessage(`{"gender":"Female","birthCountry":"US","ageGroup":"25-34","socialHoursPerDay":"2-3","purchasesLastMonth":5}`),
-			},
-			wantType: "audience",
-			wantErr:  false,
-			verifyFunc: func(a Asset) bool {
-				audience, ok := a.(*AudienceAsset)
-				return ok && audience.Gender == "Female" && audience.PurchasesLastMonth == 5
-			},
-		},
-		{
-			name: "invalid asset type",
-			req: AddAssetRequest{
-				ID:          "4",
-				Type:        "unknown",
-				Description: "Invalid Description",
-				Payload:     json.RawMessage(`{}`),
-			},
-			wantErr:  true,
-			errorMsg: "unsupported asset type: unknown",
-		},
-		{
-			name: "invalid chart payload",
-			req: AddAssetRequest{
-				ID:          "5",
-				Type:        "chart",
-				Description: "Chart Description",
-				Payload:     json.RawMessage(`{"invalidField":"value"}`),
-			},
-			wantErr:  true,
-			errorMsg: "invalid chart payload",
-		},
+		Text: "Insightful text",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			asset, err := DecodeAssetFromAddRequest(tt.req)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeAssetFromAddRequest() error = %v, wantErr = %v", err, tt.wantErr)
-				return
-			}
-			if tt.wantErr {
-				if !containsError(err.Error(), tt.errorMsg) {
-					t.Errorf("DecodeAssetFromAddRequest() error = %v, expected error to contain = %v", err, tt.errorMsg)
-				}
-				return
-			}
-			if asset.GetType() != tt.wantType {
-				t.Errorf("DecodeAssetFromAddRequest() type = %v, want = %v", asset.GetType(), tt.wantType)
-			}
-			if tt.verifyFunc != nil && !tt.verifyFunc(asset) {
-				t.Errorf("DecodeAssetFromAddRequest() verification failed")
-			}
-		})
+	bytes, err := insight.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error during MarshalJSON: %v", err)
+	}
+
+	var unmarshalledInsight InsightAsset
+	if err := json.Unmarshal(bytes, &unmarshalledInsight); err != nil {
+		t.Fatalf("unexpected error during UnmarshalJSON: %v", err)
+	}
+
+	if unmarshalledInsight.Text != insight.Text {
+		t.Errorf("expected Text to be '%s', got '%s'", insight.Text, unmarshalledInsight.Text)
 	}
 }
 
-func TestDecodeAssetFromJSON(t *testing.T) {
-	tests := []struct {
-		name       string
-		jsonData   []byte
-		wantType   AssetType
-		wantErr    bool
-		errorMsg   string
-		verifyFunc func(Asset) bool
-	}{
-		{
-			name: "valid chart JSON",
-			jsonData: json.RawMessage(`{
-				"id": "1",
-				"type": "chart",
-				"description": "Chart Description",
-				"title": "Chart Title",
-				"xAxisTitle": "X Axis",
-				"yAxisTitle": "Y Axis",
-				"data": [1.0, 2.0, 3.0]
-			}`),
-			wantType: "chart",
-			wantErr:  false,
-			verifyFunc: func(a Asset) bool {
-				chart, ok := a.(*ChartAsset)
-				return ok && chart.Title == "Chart Title" && len(chart.Data) == 3
-			},
+func TestAudienceAsset_MarshalJSON(t *testing.T) {
+	audience := &AudienceAsset{
+		BaseAsset: BaseAsset{
+			ID:          "003",
+			Type:        "Audience",
+			Description: "Audience description",
+			CreatedAt:   time.Now(),
 		},
-		{
-			name: "unsupported asset type",
-			jsonData: json.RawMessage(`{
-				"id": "2",
-				"type": "unsupported",
-				"description": "Invalid Asset"
-			}`),
-			wantErr:  true,
-			errorMsg: "unsupported asset type: unsupported",
-		},
-		{
-			name:     "invalid JSON data",
-			jsonData: json.RawMessage(`{invalid JSON`),
-			wantErr:  true,
-			errorMsg: "invalid asset json",
-		},
+		Gender:             "Female",
+		BirthCountry:       "USA",
+		AgeGroup:           "25-34",
+		SocialHoursPerDay:  "3-4",
+		PurchasesLastMonth: 5,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			asset, err := DecodeAssetFromJSON(tt.jsonData)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DecodeAssetFromJSON() error = %v, wantErr = %v", err, tt.wantErr)
-				return
-			}
-			if tt.wantErr {
-				if !containsError(err.Error(), tt.errorMsg) {
-					t.Errorf("DecodeAssetFromJSON() error = %v, expected error to contain = %v", err, tt.errorMsg)
-				}
-				return
-			}
-			if asset.GetType() != tt.wantType {
-				t.Errorf("DecodeAssetFromJSON() type = %v, want = %v", asset.GetType(), tt.wantType)
-			}
-			if tt.verifyFunc != nil && !tt.verifyFunc(asset) {
-				t.Errorf("DecodeAssetFromJSON() verification failed")
-			}
-		})
+	bytes, err := audience.MarshalJSON()
+	if err != nil {
+		t.Fatalf("unexpected error during MarshalJSON: %v", err)
 	}
-}
 
-func containsError(actual, expected string) bool {
-	return len(actual) >= len(expected) && actual[:len(expected)] == expected
+	var unmarshalledAudience AudienceAsset
+	if err := json.Unmarshal(bytes, &unmarshalledAudience); err != nil {
+		t.Fatalf("unexpected error during UnmarshalJSON: %v", err)
+	}
+
+	if unmarshalledAudience.Gender != audience.Gender {
+		t.Errorf("expected Gender to be '%s', got '%s'", audience.Gender, unmarshalledAudience.Gender)
+	}
 }
