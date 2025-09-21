@@ -2,6 +2,7 @@ package gwiexercise
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -50,70 +51,18 @@ func (s *Server) handleUserFavourites(w http.ResponseWriter, r *http.Request, us
 	switch r.Method {
 	case http.MethodGet:
 		assets := s.store.List(userID)
-		// sorting
-		q := r.URL.Query()
-		sortField := q.Get("sort")
-		if sortField == "" {
-			sortField = "created_at"
-		}
-		order := strings.ToLower(q.Get("order"))
-		desc := order == "desc"
-		sort.Slice(assets, func(i, j int) bool {
-			a, b := assets[i], assets[j]
-			switch sortField {
-			case "type":
-				if desc {
-					return string(a.GetType()) > string(b.GetType())
-				}
-				return string(a.GetType()) < string(b.GetType())
-			case "created_at":
-				ai, aj := createdAtOf(a), createdAtOf(b)
-				if desc {
-					return ai.After(aj)
-				}
-				return ai.Before(aj)
-			default:
-				ai, aj := createdAtOf(a), createdAtOf(b)
-				if desc {
-					return ai.After(aj)
-				}
-				return ai.Before(aj)
-			}
-		})
-		// pagination
-		limit := parseIntDefault(q.Get("limit"), 100)
-		if limit <= 0 || limit > 1000 {
-			limit = 100
-		}
-		offset := parseIntDefault(q.Get("offset"), 0)
-		if offset < 0 {
-			offset = 0
-		}
-		end := offset + limit
-		if offset > len(assets) {
-			assets = []Asset{}
-		} else if end < len(assets) {
-			assets = assets[offset:end]
-		} else if offset < len(assets) {
-			assets = assets[offset:]
-		}
+		sortField, desc := parseSortParams(r)
+		sortAssets(assets, sortField, desc)
+		limit, offset := parseLimitOffset(r)
+		assets = applyPagination(assets, limit, offset)
 		writeJSON(w, http.StatusOK, assets)
 	case http.MethodPost:
-		body, err := io.ReadAll(r.Body)
+		body, err := readRequestBody(r)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid body")
-			return
-		}
-		var req AddAssetRequest
-		if err := json.Unmarshal(body, &req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid json: "+err.Error())
-			return
-		}
-		if err := req.ValidateBasic(); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		asset, err := DecodeAssetFromAddRequest(req)
+		asset, err := decodeAddAsset(body)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -136,37 +85,29 @@ func (s *Server) handleUserFavouritesBulk(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	body, err := io.ReadAll(r.Body)
+	body, err := readRequestBody(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid body")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	var reqs []AddAssetRequest
-	if err := json.Unmarshal(body, &reqs); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid json array: "+err.Error())
+	assets, err := decodeBulkAddAssets(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	assets := make([]Asset, 0, len(reqs))
-	for i, r := range reqs {
-		if err := r.ValidateBasic(); err != nil {
-			writeError(w, http.StatusBadRequest, "item "+strconv.Itoa(i)+": "+err.Error())
-			return
+	if err := s.preflightBatch(userID, assets); err != nil {
+		// preflight returns 409-level conflicts with proper messages
+		status := http.StatusConflict
+		if strings.HasPrefix(err.Error(), "invalid json array:") || strings.HasPrefix(err.Error(), "item ") && strings.Contains(err.Error(), ": invalid") {
+			status = http.StatusBadRequest
 		}
-		a, err := DecodeAssetFromAddRequest(r)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "item "+strconv.Itoa(i)+": "+err.Error())
-			return
-		}
-		assets = append(assets, a)
+		writeError(w, status, err.Error())
+		return
 	}
-	created := make([]Asset, 0, len(assets))
-	for i, a := range assets {
-		c, err := s.store.Add(userID, a)
-		if err != nil {
-			writeError(w, http.StatusConflict, "item "+strconv.Itoa(i)+": "+err.Error())
-			return
-		}
-		created = append(created, c)
+	created, err := s.addAssetsBatch(userID, assets)
+	if err != nil {
+		writeError(w, http.StatusConflict, err.Error())
+		return
 	}
 	writeJSON(w, http.StatusCreated, created)
 }
@@ -239,4 +180,155 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func writeError(w http.ResponseWriter, status int, msg string) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
+// Helpers extracted from handlers
+
+func parseSortParams(r *http.Request) (field string, desc bool) {
+	q := r.URL.Query()
+	field = q.Get("sort")
+	if field == "" {
+		field = "created_at"
+	}
+	order := strings.ToLower(q.Get("order"))
+	desc = order == "desc"
+	return
+}
+
+func sortAssets(assets []Asset, field string, desc bool) {
+	if len(assets) <= 1 {
+		return
+	}
+	sort.Slice(assets, func(i, j int) bool {
+		a, b := assets[i], assets[j]
+		switch field {
+		case "type":
+			if desc {
+				return string(a.GetType()) > string(b.GetType())
+			}
+			return string(a.GetType()) < string(b.GetType())
+		case "created_at":
+			fallthrough
+		default:
+			ai, aj := createdAtOf(a), createdAtOf(b)
+			if desc {
+				return ai.After(aj)
+			}
+			return ai.Before(aj)
+		}
+	})
+}
+
+func parseLimitOffset(r *http.Request) (limit, offset int) {
+	q := r.URL.Query()
+	limit = parseIntDefault(q.Get("limit"), 100)
+	if limit <= 0 || limit > 1000 {
+		limit = 100
+	}
+	offset = parseIntDefault(q.Get("offset"), 0)
+	if offset < 0 {
+		offset = 0
+	}
+	return
+}
+
+func applyPagination(assets []Asset, limit, offset int) []Asset {
+	end := offset + limit
+	if offset >= len(assets) {
+		return []Asset{}
+	} else if end < len(assets) {
+		return assets[offset:end]
+	} else if offset < len(assets) {
+		return assets[offset:]
+	}
+	return assets
+}
+
+func readRequestBody(r *http.Request) ([]byte, error) {
+	b, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, errors.New("invalid body")
+	}
+	return b, nil
+}
+
+func decodeAddAsset(body []byte) (Asset, error) {
+	var req AddAssetRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		return nil, errors.New("invalid json: " + err.Error())
+	}
+	if err := req.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	asset, err := DecodeAssetFromAddRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	return asset, nil
+}
+
+func decodeBulkAddAssets(body []byte) ([]Asset, error) {
+	var reqs []AddAssetRequest
+	if err := json.Unmarshal(body, &reqs); err != nil {
+		return nil, errors.New("invalid json array: " + err.Error())
+	}
+	assets := make([]Asset, 0, len(reqs))
+	for i, r := range reqs {
+		if err := r.ValidateBasic(); err != nil {
+			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+		}
+		a, err := DecodeAssetFromAddRequest(r)
+		if err != nil {
+			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+		}
+		assets = append(assets, a)
+	}
+	return assets, nil
+}
+
+func (s *Server) preflightBatch(userID string, assets []Asset) error {
+	existing := s.store.List(userID)
+	existingIDs := make(map[string]struct{}, len(existing))
+	for _, e := range existing {
+		existingIDs[e.GetID()] = struct{}{}
+	}
+	batchIDs := make(map[string]struct{}, len(assets))
+	for i, a := range assets {
+		id := a.GetID()
+		if id == "" {
+			for {
+				candidate := newID()
+				if _, ok := existingIDs[candidate]; ok {
+					continue
+				}
+				if _, ok := batchIDs[candidate]; ok {
+					continue
+				}
+				setID(a, candidate)
+				id = candidate
+				break
+			}
+		} else {
+			if _, ok := existingIDs[id]; ok {
+				return errors.New("item " + strconv.Itoa(i) + ": asset with same id already exists for user")
+			}
+			if _, ok := batchIDs[id]; ok {
+				return errors.New("item " + strconv.Itoa(i) + ": asset with same id already exists for user")
+			}
+		}
+		batchIDs[id] = struct{}{}
+	}
+	return nil
+}
+
+func (s *Server) addAssetsBatch(userID string, assets []Asset) ([]Asset, error) {
+	created := make([]Asset, 0, len(assets))
+	for i, a := range assets {
+		c, err := s.store.Add(userID, a)
+		if err != nil {
+			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+		}
+		created = append(created, c)
+	}
+	return created, nil
 }

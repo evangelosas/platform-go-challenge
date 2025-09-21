@@ -1,5 +1,9 @@
 # GlobalWebIndex Engineering Challenge
 
+## Disclaimer
+Most of the code was written by Junie Pro making prompts to GPT-5 model. As my application was for the role of Engineering Manager, my main focus was to provide the correct prompts to the tool and make sure that the delivery will be up to high standards.
+Whenever it was necessary, I edited the code to make it more readable and understandable.
+
 ## Running
 
 - Go 1.20+
