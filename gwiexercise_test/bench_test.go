@@ -8,13 +8,11 @@ import (
 	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
-// Benchmark for the in-memory store.
 func BenchmarkInMemoryAddList(b *testing.B) {
 	store := gwiExercise.NewInMemoryStore()
 	benchAddList(b, store, "us")
 }
 
-// BenchmarkInFileAddList for the file store.
 func BenchmarkInFileAddList(b *testing.B) {
 	tmp := b.TempDir()
 	path := filepath.Join(tmp, "favourites_bench.json")
@@ -35,8 +33,21 @@ func benchAddList(b *testing.B, store gwiExercise.Store, user string) {
 
 func BenchmarkInMemoryBulkEndpoint(b *testing.B) {
 	store := gwiExercise.NewInMemoryStore()
+	benchBulkEndpoint(b, store, "ub2")
+}
+
+func BenchmarkInFileBulkEndpoint(b *testing.B) {
+	tmp := b.TempDir()
+	path := filepath.Join(tmp, "favourites_bulk_bench.json")
+	store, err := gwiExercise.NewFileStore(path)
+	if err != nil {
+		b.Fatalf("NewFileStore error: %v", err)
+	}
+	benchBulkEndpoint(b, store, "ubf2")
+}
+
+func benchBulkEndpoint(b *testing.B, store gwiExercise.Store, user string) {
 	s := gwiExercise.NewServer(store)
-	user := "ub2"
 	payload := make([]map[string]any, 0, 100)
 	for i := 0; i < 100; i++ {
 		payload = append(payload, map[string]any{"type": "insight", "description": "d", "payload": map[string]any{"text": "hello"}})

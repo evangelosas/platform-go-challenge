@@ -92,20 +92,37 @@ func TestAddListUpdateDeleteFlow(t *testing.T) {
 	}
 }
 
-func TestValidationErrors(t *testing.T) {
+func TestPOSTValidationCases(t *testing.T) {
 	store := gwiExercise.NewInMemoryStore()
 	s := gwiExercise.NewServer(store)
 	user := "u1"
 
-	// Missing fields
-	w := doReq(s, http.MethodPost, "/users/"+user+"/favourites", map[string]any{})
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", w.Code)
+	tests := []struct {
+		name   string
+		body   any
+		status int
+	}{
+		{
+			name:   "missing fields",
+			body:   map[string]any{},
+			status: http.StatusBadRequest,
+		},
+		{
+			name: "unsupported type",
+			body: map[string]any{
+				"type":        "unknown",
+				"description": "d",
+				"payload":     map[string]any{"x": 1},
+			},
+			status: http.StatusBadRequest,
+		},
 	}
-
-	// Unsupported type
-	w = doReq(s, http.MethodPost, "/users/"+user+"/favourites", map[string]any{"type": "unknown", "description": "d", "payload": map[string]any{"x": 1}})
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for unsupported type, got %d", w.Code)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := doReq(s, http.MethodPost, "/users/"+user+"/favourites", tc.body)
+			if w.Code != tc.status {
+				t.Fatalf("expected %d, got %d: %s", tc.status, w.Code, w.Body.String())
+			}
+		})
 	}
 }
