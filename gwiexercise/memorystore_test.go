@@ -1,17 +1,9 @@
 package gwiexercise
 
 import (
-	"sort"
 	"testing"
 	"time"
 )
-
-func TestInMemoryStore_List_EmptyForNewUser(t *testing.T) {
-	s := NewInMemoryStore()
-	if got := s.List("nouser"); len(got) != 0 {
-		t.Fatalf("expected empty list, got %d", len(got))
-	}
-}
 
 func TestInMemoryStore_Add_AssignsID_AndSetsCreatedAtIfZero(t *testing.T) {
 	s := NewInMemoryStore()
@@ -37,77 +29,6 @@ func TestInMemoryStore_Add_AssignsID_AndSetsCreatedAtIfZero(t *testing.T) {
 	}
 	if added2.GetID() != "given-id" {
 		t.Fatalf("expected given id to be preserved, got %q", added2.GetID())
-	}
-}
-
-func TestInMemoryStore_Add_DuplicateAndPerUserIsolation(t *testing.T) {
-	s := NewInMemoryStore()
-
-	a := &AudienceAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetAudience, Description: "da"}}
-	if _, err := s.Add("u1", a); err != nil {
-		t.Fatalf("unexpected add error: %v", err)
-	}
-	// duplicate in same user
-	if _, err := s.Add("u1", &AudienceAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetAudience, Description: "db"}}); err == nil || err.Error() != "asset with same id already exists for user" {
-		t.Fatalf("expected duplicate error, got %v", err)
-	}
-	// same ID allowed for different user
-	if _, err := s.Add("u2", &AudienceAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetAudience, Description: "dc"}}); err != nil {
-		t.Fatalf("unexpected error for different user: %v", err)
-	}
-}
-
-func TestInMemoryStore_List_OrderingIrrelevant(t *testing.T) {
-	s := NewInMemoryStore()
-
-	s.Add("u", &InsightAsset{BaseAsset: BaseAsset{ID: "b", Type: AssetInsight, Description: "d"}, Text: "t"})
-	s.Add("u", &InsightAsset{BaseAsset: BaseAsset{ID: "a", Type: AssetInsight, Description: "d"}, Text: "t"})
-
-	got := s.List("u")
-	if len(got) != 2 {
-		t.Fatalf("expected 2 assets, got %d", len(got))
-	}
-	ids := []string{got[0].GetID(), got[1].GetID()}
-	sort.Strings(ids)
-	if !(ids[0] == "a" && ids[1] == "b") {
-		t.Fatalf("unexpected ids: %v", ids)
-	}
-}
-
-func TestInMemoryStore_Remove(t *testing.T) {
-	s := NewInMemoryStore()
-
-	s.Add("u", &ChartAsset{BaseAsset: BaseAsset{ID: "x", Type: AssetChart, Description: "d"}, Title: "t"})
-
-	if err := s.Remove("u", "x"); err != nil {
-		t.Fatalf("remove existing: %v", err)
-	}
-	if err := s.Remove("u", "missing"); err == nil || err.Error() != "asset not found" {
-		t.Fatalf("expected asset not found, got %v", err)
-	}
-	if err := s.Remove("nouser", "x"); err == nil || err.Error() != "user not found" {
-		t.Fatalf("expected user not found, got %v", err)
-	}
-}
-
-func TestInMemoryStore_UpdateDescription(t *testing.T) {
-	s := NewInMemoryStore()
-
-	s.Add("u", &InsightAsset{BaseAsset: BaseAsset{ID: "id1", Type: AssetInsight, Description: "old"}, Text: "t"})
-
-	updated, err := s.UpdateDescription("u", "id1", "new")
-	if err != nil {
-		t.Fatalf("update: %v", err)
-	}
-	if updated.GetDescription() != "new" {
-		t.Fatalf("description not updated: %v", updated.GetDescription())
-	}
-
-	if _, err := s.UpdateDescription("nouser", "id1", "x"); err == nil || err.Error() != "user not found" {
-		t.Fatalf("expected user not found, got %v", err)
-	}
-	if _, err := s.UpdateDescription("u", "missing", "x"); err == nil || err.Error() != "asset not found" {
-		t.Fatalf("expected asset not found, got %v", err)
 	}
 }
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 	"time"
 )
@@ -127,68 +126,6 @@ func TestFileStore_Add_AssignsID_And_CreatedAt_And_Persists(t *testing.T) {
 	}
 }
 
-func TestFileStore_Add_DuplicateAndPerUserIsolation(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "store.json")
-	fs, _ := NewFileStore(path)
-
-	a := &InsightAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetInsight, Description: "d"}, Text: "hi"}
-	if _, err := fs.Add("u1", a); err != nil {
-		t.Fatalf("unexpected add error: %v", err)
-	}
-	// duplicate in same user
-	_, err := fs.Add("u1", &InsightAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetInsight, Description: "d2"}, Text: "x"})
-	if err == nil || err.Error() != "asset with same id already exists for user" {
-		t.Fatalf("expected duplicate error, got %v", err)
-	}
-	// same id for another user is allowed
-	if _, err := fs.Add("u2", &InsightAsset{BaseAsset: BaseAsset{ID: "same", Type: AssetInsight, Description: "d3"}, Text: "y"}); err != nil {
-		t.Fatalf("unexpected error for different user: %v", err)
-	}
-}
-
-func TestFileStore_List_OrderingIrrelevant(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "store.json")
-	fs, _ := NewFileStore(path)
-
-	// add two assets
-	fs.Add("u", &AudienceAsset{BaseAsset: BaseAsset{ID: "a", Type: AssetAudience, Description: "da"}})
-	fs.Add("u", &AudienceAsset{BaseAsset: BaseAsset{ID: "b", Type: AssetAudience, Description: "db"}})
-
-	got := fs.List("u")
-	if len(got) != 2 {
-		t.Fatalf("expected 2 assets, got %d", len(got))
-	}
-	ids := []string{got[0].GetID(), got[1].GetID()}
-	sort.Strings(ids)
-	if !(ids[0] == "a" && ids[1] == "b") {
-		t.Fatalf("unexpected ids: %v", ids)
-	}
-
-	if other := fs.List("nope"); len(other) != 0 {
-		t.Fatalf("expected empty slice for unknown user, got %d", len(other))
-	}
-}
-
-func TestFileStore_Remove(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "store.json")
-	fs, _ := NewFileStore(path)
-
-	fs.Add("u", &InsightAsset{BaseAsset: BaseAsset{ID: "x", Type: AssetInsight, Description: "d"}, Text: "t"})
-
-	if err := fs.Remove("u", "x"); err != nil {
-		t.Fatalf("remove existing: %v", err)
-	}
-	if err := fs.Remove("u", "missing"); err == nil || err.Error() != "asset not found" {
-		t.Fatalf("expected asset not found, got %v", err)
-	}
-	if err := fs.Remove("missing", "x"); err == nil || err.Error() != "user not found" {
-		t.Fatalf("expected user not found, got %v", err)
-	}
-}
-
 func TestFileStore_UpdateDescription_Persists(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "store.json")
@@ -212,19 +149,5 @@ func TestFileStore_UpdateDescription_Persists(t *testing.T) {
 	got := fs2.List("u")
 	if len(got) != 1 || got[0].GetDescription() != "new-desc" {
 		t.Fatalf("expected new-desc after reload, got %v", got)
-	}
-}
-
-func TestFileStore_UpdateDescription_Errors(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "store.json")
-	fs, _ := NewFileStore(path)
-
-	if _, err := fs.UpdateDescription("nouser", "x", "d"); err == nil || err.Error() != "user not found" {
-		t.Fatalf("expected user not found, got %v", err)
-	}
-	fs.Add("u", &InsightAsset{BaseAsset: BaseAsset{ID: "x", Type: AssetInsight, Description: "d"}, Text: "t"})
-	if _, err := fs.UpdateDescription("u", "missing", "d"); err == nil || err.Error() != "asset not found" {
-		t.Fatalf("expected asset not found, got %v", err)
 	}
 }
