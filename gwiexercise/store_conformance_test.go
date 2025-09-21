@@ -8,7 +8,7 @@ import (
 
 type storeFactory func(t *testing.T) Store
 
-func storesUnderTest(t *testing.T) []struct {
+func storesUnderTest() []struct {
 	name string
 	new  storeFactory
 } {
@@ -36,7 +36,7 @@ func storesUnderTest(t *testing.T) []struct {
 }
 
 func TestStoreConformance(t *testing.T) {
-	for _, tc := range storesUnderTest(t) {
+	for _, tc := range storesUnderTest() {
 		// Duplicate ID within same user should error; same ID across users allowed
 		t.Run(tc.name+"/AddDuplicateAndIsolation", func(t *testing.T) {
 			st := tc.new(t)
