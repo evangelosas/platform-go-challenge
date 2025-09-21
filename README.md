@@ -62,7 +62,7 @@ Good luck, potential colleague!
 
 ## Benchmarks Explained
 
-This repository includes three Go benchmark tests in gwiexercise_test/bench_test.go. Below is a description of how each benchmark works and the practical benefits of running them.
+This repository includes four Go benchmark tests in gwiexercise_test/bench_test.go. Below is a description of how each benchmark works and the practical benefits of running them.
 
 1) BenchmarkInMemoryAddList
 - What it measures: The throughput and memory allocations of the in-memory store when repeatedly adding favourites for a single user and then listing them.
@@ -87,8 +87,8 @@ This repository includes three Go benchmark tests in gwiexercise_test/bench_test
   - Helps you decide when to use the file-backed store in development or small deployments, and highlights optimizations in filestore.go.
   - Detects regressions related to disk writes, JSON structure, or lock contention under persistent storage.
 
-3) BenchmarkBulkEndpoint
-- What it measures: End-to-end performance of the HTTP bulk insertion endpoint (/users/{userID}/favourites/bulk) when handling batches of 100 items.
+3) BenchmarkInMemoryBulkEndpoint
+- What it measures: End-to-end performance of the HTTP bulk insertion endpoint (/users/{userID}/favourites/bulk) when handling batches of 100 items using the in-memory store.
 - How it works:
   - Creates an in-memory store and wires it into a new HTTP server with NewServer(store).
   - Builds a payload slice of 100 assets (type "insight").
@@ -99,11 +99,24 @@ This repository includes three Go benchmark tests in gwiexercise_test/bench_test
   - Highlights the performance characteristics and allocations of the bulk ingestion code path under a predictable batch size (100 items).
   - Useful for sizing throughput, spotting regressions in the HTTP layer or JSON handling, and guiding optimizations such as request batching or reduced allocations.
 
+4) BenchmarkInFileBulkEndpoint
+- What it measures: End-to-end performance of the same HTTP bulk insertion endpoint when the server is backed by the JSON file store. This shows the additional overhead introduced by persistence (encoding and disk I/O) during bulk writes.
+- How it works:
+  - Creates a temporary JSON file path and initializes a file-backed store with NewFileStore(tempPath).
+  - Wires the store into a new HTTP server with NewServer(store).
+  - Builds the same 100-item payload as the in-memory version.
+  - Calls b.ResetTimer() to exclude setup time.
+  - In the benchmark loop, posts the batch to /users/{userID}/favourites/bulk and asserts a 201 Created response.
+- Why it’s useful:
+  - Lets you compare in-memory vs file-backed end-to-end throughput and allocations for identical workloads.
+  - Surfaces the cost of JSON marshaling and file writes under bulk ingestion.
+  - Helps identify regressions tied to persistence (e.g., JSON shape changes, file flush frequency, locking around save operations).
+
 How to run and read the results
 - Run all benchmarks with memory stats: go test -bench=. -benchmem
-- Run a specific benchmark (e.g., file-backed): go test -bench=InFile -benchmem
+- Run a specific benchmark (e.g., file-backed bulk): go test -bench=InFileBulkEndpoint -benchmem
 - Typical output line items:
   - ns/op: Average time per benchmark iteration (lower is better).
   - B/op and allocs/op: Bytes allocated and number of allocations per iteration (lower is better).
 - Compare results across commits/branches to detect regressions or validate performance improvements.
-- Compare InMemory vs InFile ns/op and allocs/op to understand the relative overhead of persistence on your machine and filesystem.
+- Compare InMemory vs InFile ns/op and allocs/op to understand the relative overhead of persistence on your machine and filesystem for both single-add and bulk endpoints.

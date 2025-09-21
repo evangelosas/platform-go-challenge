@@ -2,7 +2,6 @@ package gwiexercise
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +10,49 @@ import (
 	"strings"
 	"time"
 )
+
+const (
+	MaxBodyBytes = 1 << 20 // 1MB
+	MaxBulkItems = 1000
+)
+
+type BadRequestError struct{ Msg string }
+
+func (e BadRequestError) Error() string { return e.Msg }
+
+type ConflictError struct{ Msg string }
+
+func (e ConflictError) Error() string { return e.Msg }
+
+type PayloadTooLargeError struct{ Msg string }
+
+func (e PayloadTooLargeError) Error() string { return e.Msg }
+
+type ValidationErrorDetail struct {
+	Index   int    `json:"index"`
+	Field   string `json:"field,omitempty"`
+	Code    string `json:"code,omitempty"`
+	Message string `json:"message"`
+}
+
+type BulkValidationError struct {
+	Details []ValidationErrorDetail `json:"details"`
+}
+
+func (e BulkValidationError) Error() string { return "validation failed" }
+
+func mapErrorToHTTPStatus(err error) int {
+	switch err.(type) {
+	case PayloadTooLargeError:
+		return http.StatusRequestEntityTooLarge
+	case BadRequestError, BulkValidationError:
+		return http.StatusBadRequest
+	case ConflictError:
+		return http.StatusConflict
+	default:
+		return http.StatusBadRequest
+	}
+}
 
 type Server struct {
 	store Store
@@ -87,26 +129,21 @@ func (s *Server) handleUserFavouritesBulk(w http.ResponseWriter, r *http.Request
 	}
 	body, err := readRequestBody(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeAppError(w, err)
 		return
 	}
 	assets, err := decodeBulkAddAssets(body)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeAppError(w, err)
 		return
 	}
 	if err := s.preflightBatch(userID, assets); err != nil {
-		// preflight returns 409-level conflicts with proper messages
-		status := http.StatusConflict
-		if strings.HasPrefix(err.Error(), "invalid json array:") || strings.HasPrefix(err.Error(), "item ") && strings.Contains(err.Error(), ": invalid") {
-			status = http.StatusBadRequest
-		}
-		writeError(w, status, err.Error())
+		writeAppError(w, err)
 		return
 	}
 	created, err := s.addAssetsBatch(userID, assets)
 	if err != nil {
-		writeError(w, http.StatusConflict, err.Error())
+		writeAppError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, created)
@@ -182,7 +219,18 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
-// Helpers extracted from handlers
+func writeAppError(w http.ResponseWriter, err error) {
+	status := mapErrorToHTTPStatus(err)
+	if bve, ok := err.(BulkValidationError); ok {
+		resp := map[string]any{
+			"error":   bve.Error(),
+			"details": bve.Details,
+		}
+		writeJSON(w, status, resp)
+		return
+	}
+	writeError(w, status, err.Error())
+}
 
 func parseSortParams(r *http.Request) (field string, desc bool) {
 	q := r.URL.Query()
@@ -247,7 +295,10 @@ func applyPagination(assets []Asset, limit, offset int) []Asset {
 func readRequestBody(r *http.Request) ([]byte, error) {
 	b, err := io.ReadAll(r.Body)
 	if err != nil {
-		return nil, errors.New("invalid body")
+		return nil, BadRequestError{Msg: "invalid body"}
+	}
+	if len(b) > MaxBodyBytes {
+		return nil, PayloadTooLargeError{Msg: "request body too large"}
 	}
 	return b, nil
 }
@@ -255,14 +306,14 @@ func readRequestBody(r *http.Request) ([]byte, error) {
 func decodeAddAsset(body []byte) (Asset, error) {
 	var req AddAssetRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, errors.New("invalid json: " + err.Error())
+		return nil, BadRequestError{Msg: "invalid json: " + err.Error()}
 	}
 	if err := req.ValidateBasic(); err != nil {
-		return nil, err
+		return nil, BadRequestError{Msg: err.Error()}
 	}
 	asset, err := DecodeAssetFromAddRequest(req)
 	if err != nil {
-		return nil, err
+		return nil, BadRequestError{Msg: err.Error()}
 	}
 	return asset, nil
 }
@@ -270,16 +321,19 @@ func decodeAddAsset(body []byte) (Asset, error) {
 func decodeBulkAddAssets(body []byte) ([]Asset, error) {
 	var reqs []AddAssetRequest
 	if err := json.Unmarshal(body, &reqs); err != nil {
-		return nil, errors.New("invalid json array: " + err.Error())
+		return nil, BadRequestError{Msg: "invalid json array: " + err.Error()}
+	}
+	if len(reqs) > MaxBulkItems {
+		return nil, PayloadTooLargeError{Msg: "too many items in bulk request: max " + strconv.Itoa(MaxBulkItems)}
 	}
 	assets := make([]Asset, 0, len(reqs))
 	for i, r := range reqs {
 		if err := r.ValidateBasic(); err != nil {
-			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+			return nil, BulkValidationError{Details: []ValidationErrorDetail{{Index: i, Message: err.Error(), Code: "invalid"}}}
 		}
 		a, err := DecodeAssetFromAddRequest(r)
 		if err != nil {
-			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+			return nil, BulkValidationError{Details: []ValidationErrorDetail{{Index: i, Message: err.Error(), Code: "invalid"}}}
 		}
 		assets = append(assets, a)
 	}
@@ -310,10 +364,10 @@ func (s *Server) preflightBatch(userID string, assets []Asset) error {
 			}
 		} else {
 			if _, ok := existingIDs[id]; ok {
-				return errors.New("item " + strconv.Itoa(i) + ": asset with same id already exists for user")
+				return ConflictError{Msg: "item " + strconv.Itoa(i) + ": asset with same id already exists for user"}
 			}
 			if _, ok := batchIDs[id]; ok {
-				return errors.New("item " + strconv.Itoa(i) + ": asset with same id already exists for user")
+				return ConflictError{Msg: "item " + strconv.Itoa(i) + ": asset with same id already exists for user"}
 			}
 		}
 		batchIDs[id] = struct{}{}
@@ -326,7 +380,7 @@ func (s *Server) addAssetsBatch(userID string, assets []Asset) ([]Asset, error) 
 	for i, a := range assets {
 		c, err := s.store.Add(userID, a)
 		if err != nil {
-			return nil, errors.New("item " + strconv.Itoa(i) + ": " + err.Error())
+			return nil, ConflictError{Msg: "item " + strconv.Itoa(i) + ": " + err.Error()}
 		}
 		created = append(created, c)
 	}
