@@ -13,7 +13,6 @@ type AddAssetRequest struct {
 	Payload     json.RawMessage `json:"payload"`
 }
 
-// MarshalJSON implementations for asset types
 func (chart *ChartAsset) MarshalJSON() ([]byte, error) {
 	type alias ChartAsset
 	return json.Marshal((*alias)(chart))
