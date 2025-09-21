@@ -13,6 +13,24 @@ Whenever it was necessary, I edited the code to make it more readable and unders
   - `FAV_STORE=file FAV_PATH=./data/favourites.json go run .`
   - By default, file store path is `data/favourites.json` if FAV_PATH is not set.
 
+### Containerized (Docker/Podman)
+
+- Build with Docker:
+  - `docker build -t favourites:latest .`
+- Run (in-memory store):
+  - `docker run --rm -p 8080:8080 favourites:latest`
+- Run with file persistence (mount host dir for data):
+  - `docker run --rm -p 8080:8080 -e FAV_STORE=file -e FAV_PATH=/data/favourites.json -v $(pwd)/data:/data favourites:latest`
+
+- Build with Podman:
+  - `podman build -t favourites:latest -f Containerfile .`
+- Run (in-memory store):
+  - `podman run --rm -p 8080:8080 favourites:latest`
+- Run with file persistence:
+  - `podman run --rm -p 8080:8080 -e FAV_STORE=file -e FAV_PATH=/data/favourites.json -v $(pwd)/data:/data favourites:latest`
+
+Note: On Windows PowerShell, replace $(pwd) with ${PWD} or a full path.
+
 ## API
 
 Base path: `/users/{userID}/favourites`
