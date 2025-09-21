@@ -2,14 +2,30 @@ package gwiexercise_test
 
 import (
 	"net/http"
+	"path/filepath"
 	"testing"
 
 	gwiExercise "platform-go-challenge/gwiexercise"
 )
 
+// Benchmark for the in-memory store.
 func BenchmarkInMemoryAddList(b *testing.B) {
 	store := gwiExercise.NewInMemoryStore()
-	user := "ub"
+	benchAddList(b, store, "us")
+}
+
+// BenchmarkInFileAddList for the file store.
+func BenchmarkInFileAddList(b *testing.B) {
+	tmp := b.TempDir()
+	path := filepath.Join(tmp, "favourites_bench.json")
+	store, err := gwiExercise.NewFileStore(path)
+	if err != nil {
+		b.Fatalf("NewFileStore error: %v", err)
+	}
+	benchAddList(b, store, "uf")
+}
+
+func benchAddList(b *testing.B, store gwiExercise.Store, user string) {
 	for i := 0; i < b.N; i++ {
 		_, _ = store.Add(user, &gwiExercise.InsightAsset{BaseAsset: gwiExercise.BaseAsset{Type: gwiExercise.AssetInsight, Description: "d"}, Text: "x"})
 	}
@@ -17,7 +33,7 @@ func BenchmarkInMemoryAddList(b *testing.B) {
 	_ = store.List(user)
 }
 
-func BenchmarkBulkEndpoint(b *testing.B) {
+func BenchmarkInMemoryBulkEndpoint(b *testing.B) {
 	store := gwiExercise.NewInMemoryStore()
 	s := gwiExercise.NewServer(store)
 	user := "ub2"

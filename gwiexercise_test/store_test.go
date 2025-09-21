@@ -9,7 +9,7 @@ import (
 )
 
 func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {
-	s := gwiExercise.NewInMemoryStore()
+	var s gwiExercise.Store = gwiExercise.NewInMemoryStore()
 	user := "u1"
 
 	// add with empty ID assigns one
@@ -49,10 +49,11 @@ func TestInMemoryStore_AddDuplicateAndErrors(t *testing.T) {
 func TestFileStore_PersistReload(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "fav.json")
-	fs, err := gwiExercise.NewFileStore(file)
+	fstore, err := gwiExercise.NewFileStore(file)
 	if err != nil {
 		t.Fatalf("init filestore: %v", err)
 	}
+	var fs gwiExercise.Store = fstore
 
 	user := "u2"
 	_, err = fs.Add(user, &gwiExercise.InsightAsset{BaseAsset: gwiExercise.BaseAsset{Type: gwiExercise.AssetInsight, Description: "ins"}, Text: "hello"})
@@ -61,10 +62,11 @@ func TestFileStore_PersistReload(t *testing.T) {
 	}
 
 	// reload new instance
-	fs2, err := gwiExercise.NewFileStore(file)
+	fstore2, err := gwiExercise.NewFileStore(file)
 	if err != nil {
 		t.Fatalf("reload: %v", err)
 	}
+	var fs2 gwiExercise.Store = fstore2
 	list := fs2.List(user)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 item after reload, got %d", len(list))

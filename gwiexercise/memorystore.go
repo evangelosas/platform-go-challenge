@@ -9,13 +9,6 @@ import (
 
 var rng = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-type Store interface {
-	List(userID string) []Asset
-	Add(userID string, a Asset) (Asset, error)
-	Remove(userID, assetID string) error
-	UpdateDescription(userID, assetID, description string) (Asset, error)
-}
-
 type InMemoryStore struct {
 	mu    sync.RWMutex
 	users map[string]map[string]Asset // userID -> assetID -> Asset

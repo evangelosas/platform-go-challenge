@@ -18,7 +18,7 @@ func (m *mockAsset) SetDescription(desc string)   { m.description = desc }
 func (m *mockAsset) MarshalJSON() ([]byte, error) { return nil, nil }
 
 func TestInMemoryStore_List(t *testing.T) {
-	store := NewInMemoryStore()
+	var store Store = NewInMemoryStore()
 	store.Add("user1", &mockAsset{id: "asset1", description: "desc1"})
 	store.Add("user1", &mockAsset{id: "asset2", description: "desc2"})
 
@@ -55,7 +55,7 @@ func TestInMemoryStore_List(t *testing.T) {
 }
 
 func TestInMemoryStore_Add(t *testing.T) {
-	store := NewInMemoryStore()
+	var store Store = NewInMemoryStore()
 
 	tests := []struct {
 		name     string
@@ -94,7 +94,7 @@ func TestInMemoryStore_Add(t *testing.T) {
 }
 
 func TestInMemoryStore_Remove(t *testing.T) {
-	store := NewInMemoryStore()
+	var store Store = NewInMemoryStore()
 	store.Add("user1", &mockAsset{id: "asset1", description: "desc1"})
 
 	tests := []struct {
@@ -134,7 +134,7 @@ func TestInMemoryStore_Remove(t *testing.T) {
 }
 
 func TestInMemoryStore_UpdateDescription(t *testing.T) {
-	store := NewInMemoryStore()
+	var store Store = NewInMemoryStore()
 	store.Add("user1", &mockAsset{id: "asset1", description: "desc1"})
 
 	tests := []struct {
